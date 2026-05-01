@@ -146,7 +146,6 @@ function onRoundStart(m) {
   $("#stageRoundNumber").textContent = `Round ${m.round_index + 1}`;
   $("#stage").classList.remove("revealed");
   $("#progressBar").style.width = "0%";
-  $("#revealBanner").hidden = true;
   $("#btnHostStart").hidden = true;
   const audio = $("#audio");
   audio.src = m.audio_url;
@@ -162,16 +161,14 @@ function onRoundTick(m) {
 }
 
 function onRoundEnd(m) {
-  // Reveal: load the cover, show title + artist banner.
+  // Reveal: show the cover and post the answer to chat as "Title - Artist".
   const cover = $("#cover");
   if (m.track.cover_url) cover.src = m.track.cover_url;
   $("#stage").classList.add("revealed");
   $("#progressBar").style.width = "100%";
-  $("#revealBanner").hidden = false;
-  $("#revealTitle").textContent = m.track.title;
-  $("#revealArtist").textContent = m.track.artist;
   setEnabled(false);
   renderPlayers(m.leaderboard);
+  chatPush("answer", `${m.track.title} - ${m.track.artist}`);
   if (m.is_final) chatPush("system", "Final round complete.");
 }
 
@@ -248,17 +245,25 @@ $("#formGuess").addEventListener("submit", (ev) => {
 
 $("#btnHostStart").addEventListener("click", () => send({ type: "start" }));
 
-// Volume control. Default 30%, persisted to localStorage.
+// Volume control. Slider 0-25 (max audio.volume = 0.25), default 0.10.
+// Persisted to localStorage under a versioned key so older values from
+// earlier iterations don't override the current default.
 const audio = $("#audio");
 const volSlider = $("#inpVolume");
-const savedVol = parseFloat(localStorage.getItem("volume") ?? "0.3");
-const initialVol = Number.isFinite(savedVol) ? Math.max(0, Math.min(1, savedVol)) : 0.3;
+const VOL_MAX = 0.25;
+const VOL_DEFAULT = 0.10;
+const VOL_KEY = "volume_v2";
+const savedRaw = localStorage.getItem(VOL_KEY);
+const savedVol = savedRaw === null ? NaN : parseFloat(savedRaw);
+const initialVol = Number.isFinite(savedVol)
+  ? Math.max(0, Math.min(VOL_MAX, savedVol))
+  : VOL_DEFAULT;
 audio.volume = initialVol;
 volSlider.value = String(Math.round(initialVol * 100));
 volSlider.addEventListener("input", () => {
   const v = parseInt(volSlider.value, 10) / 100;
   audio.volume = v;
-  localStorage.setItem("volume", String(v));
+  localStorage.setItem(VOL_KEY, String(v));
 });
 
 // Click-to-unlock audio (browsers block autoplay until a gesture).
