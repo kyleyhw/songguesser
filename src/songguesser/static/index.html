@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>songguesser</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div id="app">
+  <!-- Landing screen -->
+  <section id="screen-landing" class="screen visible">
+    <div class="brand">
+      <h1>songguesser</h1>
+      <p class="tagline">Guess the song. Faster is better.</p>
+    </div>
+
+    <div class="card">
+      <h2>Host a game</h2>
+      <p class="muted">Paste any public Spotify playlist URL.</p>
+      <form id="formCreate">
+        <label>
+          Playlist URL
+          <input id="inpPlaylist" type="url" required
+                 placeholder="https://open.spotify.com/playlist/..." autocomplete="off">
+        </label>
+        <div class="grid-2">
+          <label>
+            Rounds
+            <input id="inpRounds" type="number" value="10" min="1" max="50" required>
+          </label>
+          <label>
+            Round seconds
+            <input id="inpRoundSec" type="number" value="30" min="10" max="60" required>
+          </label>
+        </div>
+        <button class="btn primary" type="submit">Create room</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Join a game</h2>
+      <form id="formJoin">
+        <label>
+          Room code
+          <input id="inpCode" type="text" maxlength="6" required
+                 placeholder="ABC123" autocomplete="off" style="text-transform:uppercase">
+        </label>
+        <label>
+          Your name
+          <input id="inpName" type="text" maxlength="24" required placeholder="Player">
+        </label>
+        <button class="btn" type="submit">Join</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- Game screen -->
+  <section id="screen-game" class="screen">
+    <header class="game-header">
+      <div class="room-info">
+        <span class="room-code" id="lblCode">------</span>
+        <span class="playlist-name" id="lblPlaylist"></span>
+      </div>
+      <div class="round-info" id="roundInfo">
+        <span id="lblPhase">Lobby</span>
+        <span id="lblRound"></span>
+        <label class="volume-row">
+          <span class="vol-icon">♪</span>
+          <input id="inpVolume" type="range" min="0" max="100" value="30">
+        </label>
+      </div>
+    </header>
+
+    <main class="game-main">
+      <div class="cover-stage">
+        <div class="cover-frame" id="stage">
+          <div class="stage-placeholder">
+            <span class="stage-round" id="stageRoundNumber">Lobby</span>
+          </div>
+          <img id="cover" alt="" />
+        </div>
+        <div class="progress">
+          <div class="progress-bar" id="progressBar"></div>
+        </div>
+        <div class="reveal-banner" id="revealBanner" hidden>
+          <div class="reveal-track">
+            <div class="reveal-title" id="revealTitle"></div>
+            <div class="reveal-artist" id="revealArtist"></div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="sidebar">
+        <div class="leaderboard">
+          <h3>Players</h3>
+          <ul id="players"></ul>
+        </div>
+
+        <div class="chat">
+          <ul id="chat"></ul>
+        </div>
+
+        <form id="formGuess" class="guess-row">
+          <input id="inpGuess" type="text" placeholder="Type your guess…" autocomplete="off" autofocus disabled>
+          <button class="btn primary" type="submit" disabled>Guess</button>
+        </form>
+
+        <button id="btnHostStart" class="btn primary host-only" hidden>Start game</button>
+      </aside>
+    </main>
+
+    <audio id="audio" preload="auto"></audio>
+
+    <div class="toast-stack" id="toasts"></div>
+  </section>
+</div>
+<script src="/static/app.js" type="module"></script>
+</body>
+</html>
