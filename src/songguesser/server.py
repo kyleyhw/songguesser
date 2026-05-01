@@ -32,6 +32,7 @@ and then either advances or ends the game.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -424,10 +425,8 @@ async def _run_game(entry: RoomEntry) -> None:
                 )
                 remaining = deadline - time.monotonic()
                 tick = min(0.25, max(0.0, remaining))
-                try:
+                with contextlib.suppress(asyncio.TimeoutError):
                     await asyncio.wait_for(entry.early_end.wait(), timeout=tick)
-                except asyncio.TimeoutError:
-                    pass
             async with entry.lock:
                 engine.end_round_to_reveal()
             await _broadcast_round_end(entry)
