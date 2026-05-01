@@ -78,6 +78,13 @@ log = logging.getLogger("songguesser.server")
 STATIC_DIR = Path(__file__).parent / "static"
 
 
+class CreateRoomBody(BaseModel):
+    playlist_url: str
+    max_rounds: int = 10
+    round_seconds: float = 30.0
+    reveal_seconds: float = 8.0
+
+
 # ---------------------------------------------------------------------------
 # Lifecycle
 # ---------------------------------------------------------------------------
@@ -115,12 +122,6 @@ def create_app() -> FastAPI:
                 "<h1>songguesser</h1><p>Static client missing.</p>", status_code=500
             )
         return HTMLResponse(index_path.read_text(encoding="utf-8"))
-
-    class CreateRoomBody(BaseModel):
-        playlist_url: str
-        max_rounds: int = 10
-        round_seconds: float = 30.0
-        reveal_seconds: float = 8.0
 
     @app.post("/api/rooms")
     async def create_room(request: Request, body: CreateRoomBody) -> JSONResponse:
