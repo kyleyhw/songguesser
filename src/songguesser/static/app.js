@@ -162,16 +162,14 @@ function onRoundTick(m) {
 }
 
 function onRoundEnd(m) {
-  // Reveal: load the cover, show title + artist banner.
+  // Reveal: show the cover and post the answer to chat.
   const cover = $("#cover");
   if (m.track.cover_url) cover.src = m.track.cover_url;
   $("#stage").classList.add("revealed");
   $("#progressBar").style.width = "100%";
-  $("#revealBanner").hidden = false;
-  $("#revealTitle").textContent = m.track.title;
-  $("#revealArtist").textContent = m.track.artist;
   setEnabled(false);
   renderPlayers(m.leaderboard);
+  chatPush("answer", `${m.track.title} - ${m.track.artist}`);
   if (m.is_final) chatPush("system", "Final round complete.");
 }
 
