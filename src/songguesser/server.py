@@ -51,7 +51,7 @@ from fastapi import (
 )
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 from .engine import GameEngine
 from .models import GuessKind, Player, Playlist, Room, RoomPhase, Track
@@ -81,7 +81,8 @@ STATIC_DIR = Path(__file__).parent / "static"
 class CreateRoomBody(BaseModel):
     playlist_url: str
     max_rounds: int = 10
-    round_seconds: float = 30.0
+    # Spotify CDN previews are 30 s; the round cannot exceed the audio.
+    round_seconds: float = Field(default=15.0, gt=0, le=30.0)
     reveal_seconds: float = 8.0
 
 
