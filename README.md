@@ -51,6 +51,27 @@ The bundled `scripts/serve.sh` starts both at once:
 TUNNEL=1 bash scripts/serve.sh
 ```
 
+## How friends connect
+
+The host runs the server (LAN or tunnel as above) and creates a room.
+The room screen shows a 6-character code (e.g. `8F3KQ2`) at the top
+left. Send each friend:
+
+1. The URL they should open in their browser:
+   - **LAN**: `http://<your-lan-ip>:8138` (printed in the host's
+     startup banner).
+   - **Internet**: the `https://<random>.trycloudflare.com` URL printed
+     by `cloudflared`.
+2. The 6-character room code.
+
+On that page they fill in *Join a game*: paste the code, type a
+display name, click *Join*. They appear in the host's lobby
+immediately. Once everyone is in, the host clicks *Start game*.
+
+Friends do **not** need a Spotify account, a developer app, or any
+local install. Any modern browser works (audio playback uses the HTML
+`<audio>` element with no autoplay).
+
 ## Rules and scoring
 
 Each round plays a 30-second preview. The album cover is hidden during
@@ -90,30 +111,6 @@ A round ends when **everyone** has guessed both parts, or when the
   "reveal_seconds": 8.0
 }
 ```
-
-## Tests
-
-```bash
-uv run pytest -q
-```
-
-End-to-end multi-player simulation:
-
-```bash
-# In one terminal:
-SONGGUESSER_ENABLE_SYNTHETIC=1 uv run python -m songguesser
-# In another:
-uv run python scripts/fake_players.py --players 4
-```
-
-## Caveats
-
-- Spotify's developer terms prohibit "creating a game" with the Web API.
-  songguesser deliberately avoids the Web API and uses only the public
-  embed page; this is appropriate for hobby use among friends but is
-  not a production-deployable architecture.
-- Some tracks have no preview (regional / takedown); they are silently
-  dropped from the playlist.
 
 ## Project layout
 
