@@ -130,6 +130,7 @@ function onState(room) {
   $("#lblRound").textContent = room.round_index >= 0
     ? `Round ${room.round_index + 1} / ${room.total_rounds}`
     : `${room.total_rounds} rounds`;
+  state.revealSeconds = room.reveal_seconds;
   renderPlayers(room.players);
   // Identify ourselves and whether we're host.
   const me = room.players.find((p) => p.id === state.playerId);
@@ -145,7 +146,14 @@ function onRoundStart(m) {
   cover.removeAttribute("src");
   $("#stageRoundNumber").textContent = `Round ${m.round_index + 1}`;
   $("#stage").classList.remove("revealed");
-  $("#progressBar").style.width = "0%";
+  // Bar progresses left-to-right during PLAYING (per round_tick).
+  const bar = $("#progressBar");
+  bar.style.transition = "none";
+  bar.style.width = "0%";
+  bar.style.background = "var(--accent)";
+  // Force reflow before re-enabling the tick transition.
+  void bar.offsetWidth;
+  bar.style.transition = "";
   $("#btnHostStart").hidden = true;
   const audio = $("#audio");
   audio.src = m.audio_url;
@@ -165,10 +173,19 @@ function onRoundEnd(m) {
   const cover = $("#cover");
   if (m.track.cover_url) cover.src = m.track.cover_url;
   $("#stage").classList.add("revealed");
-  $("#progressBar").style.width = "100%";
   setEnabled(false);
   renderPlayers(m.leaderboard);
   chatPush("answer", `${m.track.title} - ${m.track.artist}`);
+  // Bottom bar now counts down the reveal pause: snap to 0%, then linearly
+  // grow to 100% over reveal_seconds (defaults to 4 s).
+  const bar = $("#progressBar");
+  const revealS = state.revealSeconds || 4;
+  bar.style.transition = "none";
+  bar.style.background = "var(--fg-faint)";
+  bar.style.width = "0%";
+  void bar.offsetWidth;
+  bar.style.transition = `width ${revealS}s linear`;
+  bar.style.width = "100%";
   if (m.is_final) chatPush("system", "Final round complete.");
 }
 
@@ -251,8 +268,8 @@ $("#btnHostStart").addEventListener("click", () => send({ type: "start" }));
 const audio = $("#audio");
 const volSlider = $("#inpVolume");
 const VOL_MAX = 0.25;
-const VOL_DEFAULT = 0.10;
-const VOL_KEY = "volume_v2";
+const VOL_DEFAULT = 0.05;
+const VOL_KEY = "volume_v3";
 const savedRaw = localStorage.getItem(VOL_KEY);
 const savedVol = savedRaw === null ? NaN : parseFloat(savedRaw);
 const initialVol = Number.isFinite(savedVol)

@@ -299,11 +299,8 @@ async def _handle_socket(entry: RoomEntry, ws: WebSocket, player_id: str, name: 
                             ErrorMsg(message="only the host can advance").model_dump()
                         )
                         continue
-                # Simplest: cancel the current runner and launch a fresh one.
-                # The runner reads `phase` to decide what to do next.
-                if entry.runner is not None and not entry.runner.done():
-                    entry.runner.cancel()
-                entry.runner = asyncio.create_task(_run_game(entry))
+                # Host skip: signal the tick loop the same way as everyone-solved.
+                entry.early_end.set()
                 continue
             if msg.type == "guess":
                 async with entry.lock:
@@ -326,10 +323,9 @@ async def _handle_socket(entry: RoomEntry, ws: WebSocket, player_id: str, name: 
                         ).model_dump(),
                     )
                 if out.everyone_solved:
-                    # Cancel the runner's sleep so it transitions immediately.
-                    if entry.runner is not None and not entry.runner.done():
-                        entry.runner.cancel()
-                    entry.runner = asyncio.create_task(_run_game(entry, skip_to_reveal=True))
+                    # Signal the runner's tick loop to exit; it will then
+                    # transition the round to REVEAL exactly once.
+                    entry.early_end.set()
     except WebSocketDisconnect:
         pass
     finally:
@@ -388,65 +384,54 @@ def _track_public(t: Track) -> TrackPublic:
     )
 
 
-async def _run_game(entry: RoomEntry, *, skip_to_reveal: bool = False) -> None:
+async def _run_game(entry: RoomEntry) -> None:
     """Drive the game forward.
 
-    On entry, the room is either LOBBY (start the first round), PLAYING
-    (continue the current round), or REVEAL (advance to the next round).
-    The function loops until the playlist is exhausted; cancellation is
-    used to interrupt the playing-phase sleep when everyone solves early.
+    A single runner owns all phase transitions. The tick loop polls
+    ``entry.early_end`` each iteration; when the WS handler signals it
+    (because every connected player solved BOTH), the loop exits and the
+    round transitions to REVEAL exactly once.
     """
     engine = entry.engine
     try:
         while not engine.is_finished():
-            phase = engine.room.phase
-            if phase == RoomPhase.LOBBY or phase == RoomPhase.REVEAL:
-                if skip_to_reveal:
-                    # We were re-entered because everyone solved. Switch to REVEAL
-                    # immediately rather than starting a new round.
-                    skip_to_reveal = False
-                    async with entry.lock:
-                        engine.end_round_to_reveal()
-                    await _broadcast_round_end(entry)
-                    await asyncio.sleep(engine.room.reveal_seconds)
-                    continue
-                async with entry.lock:
-                    try:
-                        round = engine.start_round()
-                    except StopIteration:
-                        await _broadcast_state(entry)
-                        return
+            async with entry.lock:
+                try:
+                    round = engine.start_round()
+                except StopIteration:
+                    await _broadcast_state(entry)
+                    return
+            entry.early_end.clear()
+            await _broadcast(
+                entry,
+                RoundStartMsg(
+                    round_index=round.index,
+                    audio_url=round.track.preview_url,
+                    duration=round.duration_seconds,
+                    cover_url=round.track.cover_url,
+                ).model_dump(),
+            )
+            await _broadcast_state(entry)
+            # Tick loop. asyncio.wait_for on the early-end event lets the
+            # loop exit immediately when everyone solves.
+            deadline = time.monotonic() + round.duration_seconds
+            while time.monotonic() < deadline and not entry.early_end.is_set():
                 await _broadcast(
                     entry,
-                    RoundStartMsg(
-                        round_index=round.index,
-                        audio_url=round.track.preview_url,
-                        duration=round.duration_seconds,
-                        cover_url=round.track.cover_url,
+                    RoundTickMsg(
+                        elapsed=round.elapsed(), progress=round.progress()
                     ).model_dump(),
                 )
-                await _broadcast_state(entry)
-                # Tick loop.
-                deadline = time.monotonic() + round.duration_seconds
+                remaining = deadline - time.monotonic()
+                tick = min(0.25, max(0.0, remaining))
                 try:
-                    while time.monotonic() < deadline:
-                        elapsed = round.elapsed()
-                        await _broadcast(
-                            entry,
-                            RoundTickMsg(elapsed=elapsed, progress=round.progress()).model_dump(),
-                        )
-                        await asyncio.sleep(0.25)
-                except asyncio.CancelledError:
+                    await asyncio.wait_for(entry.early_end.wait(), timeout=tick)
+                except asyncio.TimeoutError:
                     pass
-                async with entry.lock:
-                    engine.end_round_to_reveal()
-                await _broadcast_round_end(entry)
-                await asyncio.sleep(engine.room.reveal_seconds)
-            elif phase == RoomPhase.PLAYING:
-                # Should not happen; runner owns transitions. Defensive.
-                await asyncio.sleep(0.5)
-            else:
-                break
+            async with entry.lock:
+                engine.end_round_to_reveal()
+            await _broadcast_round_end(entry)
+            await asyncio.sleep(engine.room.reveal_seconds)
     finally:
         await _broadcast_state(entry)
 

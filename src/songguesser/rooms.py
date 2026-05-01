@@ -26,6 +26,9 @@ class RoomEntry:
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     # Tracks the round-runner task so we can cancel it on disconnect/cleanup.
     runner: asyncio.Task[None] | None = None
+    # Set by the WS handler when everyone has solved; the runner's tick loop
+    # checks this every iteration and exits early to transition to REVEAL.
+    early_end: asyncio.Event = field(default_factory=asyncio.Event)
 
 
 class RoomRegistry:

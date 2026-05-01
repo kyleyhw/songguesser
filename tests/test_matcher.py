@@ -55,11 +55,19 @@ def test_typo_below_threshold_is_none() -> None:
     assert match_guess("xyzqq", track).kind == GuessKind.NONE
 
 
-def test_partial_token_overlap_is_not_enough() -> None:
-    """One shared token out of three is below threshold."""
+def test_partial_token_does_not_match() -> None:
+    """A subset of the title's tokens must NOT count as a match.
+
+    Strict policy: after normalisation the guess must equal the field
+    exactly. "Bohemian" alone does not equal "Bohemian Rhapsody".
+    """
     track = _track("Bohemian Rhapsody", "Queen")
-    res = match_guess("Bohemian", track)
-    # `Bohemian` token-set-ratios well against `bohemian rhapsody`; 1.0 is OK
-    # for partial credit on title since it's a strict subset of the title's
-    # tokens. We accept this as TITLE — locking in current behaviour.
-    assert res.kind == GuessKind.TITLE
+    assert match_guess("Bohemian", track).kind == GuessKind.NONE
+    assert match_guess("Rhapsody", track).kind == GuessKind.NONE
+
+
+def test_full_title_matches() -> None:
+    track = _track("Bohemian Rhapsody", "Queen")
+    assert match_guess("Bohemian Rhapsody", track).kind == GuessKind.TITLE
+    assert match_guess("bohemian rhapsody!", track).kind == GuessKind.TITLE
+    assert match_guess("  Bohemian   Rhapsody  ", track).kind == GuessKind.TITLE

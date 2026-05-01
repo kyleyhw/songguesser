@@ -2,28 +2,25 @@
 
 Algorithm
 ---------
-A guess string is normalised (see :func:`normalize`) and compared to the
-track's normalised title and artist by ``rapidfuzz.fuzz.token_set_ratio``.
-The guess matches a field iff the similarity ≥ ``MATCH_THRESHOLD``.
+The guess and the track's title and artist are first normalised:
 
-Three guess shapes are accepted:
+  * Unicode → ASCII (diacritics dropped).
+  * Edition tags such as ``(Remastered 2011)`` or ``(feat. ...)`` removed.
+  * Punctuation collapsed to whitespace.
+  * Lower-cased, runs of whitespace collapsed.
 
-  1. **Title-only** — guess matches the title above threshold.
-  2. **Artist-only** — guess matches the artist above threshold.
-  3. **Both** — guess matches a substring "<artist> <title>" or
-     "<title> <artist>" or contains tokens that combine to satisfy both.
+After normalisation the comparison is **exact equality** — no fuzzy
+threshold. A guess matches the title (resp. artist) iff the normalised
+guess string equals the normalised title (resp. artist). A guess
+matches BOTH if the normalised guess equals either ``"<title> <artist>"``
+or ``"<artist> <title>"``, *or* both individual fields match (which can
+happen when the title equals the artist, e.g. on self-titled singles).
 
-Symmetry. Players type guesses in any order ("Adele Hello" or
-"Hello Adele"); we test both concatenations and take the better score.
-
-Threshold rationale
--------------------
-``MATCH_THRESHOLD = 0.84`` was selected to be slightly stricter than the
-resolver's matching threshold (0.78). The resolver is comparing two
-*authoritative* metadata strings (Spotify vs Deezer) where false positives
-are paid for in metadata mismatch only, while the matcher compares user
-input to ground truth — false positives are paid for in score, which is
-much more costly. See ``docs/matcher_threshold.md``.
+This is intentionally strict: the previous token-set fuzzy match would
+accept "Bohemian" alone for "Bohemian Rhapsody / Queen", which is too
+lenient. Tags and diacritics are still stripped so e.g. "Cafe" matches
+"Café" and "Don't Stop Me Now" matches "Don't Stop Me Now (Remastered
+2011)".
 """
 
 from __future__ import annotations
@@ -32,11 +29,7 @@ import re
 import unicodedata
 from dataclasses import dataclass
 
-from rapidfuzz import fuzz
-
 from .models import GuessKind, Track
-
-MATCH_THRESHOLD = 0.84
 
 _TAG_RE = re.compile(
     r"""
@@ -49,22 +42,21 @@ _TAG_RE = re.compile(
 
 
 def normalize(s: str) -> str:
-    """Same normalisation rules as the resolver, kept consistent."""
+    """Lowercase, strip diacritics + edition tags, collapse punctuation."""
     s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode("ascii")
     s = _TAG_RE.sub(" ", s)
     s = re.sub(r"[^a-z0-9]+", " ", s.lower())
     return " ".join(s.split())
 
 
-def _ratio(a: str, b: str) -> float:
-    if not a or not b:
-        return 0.0
-    return fuzz.token_set_ratio(a, b) / 100.0
-
-
 @dataclass(frozen=True)
 class MatchResult:
-    """Outcome of matching one guess against the current track."""
+    """Outcome of matching one guess against the current track.
+
+    ``title_score`` and ``artist_score`` are 1.0 on exact normalised match
+    and 0.0 otherwise; ``combined_score`` is 1.0 iff the guess matched
+    BOTH (either by combined string or by both fields individually).
+    """
 
     kind: GuessKind
     title_score: float
@@ -75,25 +67,21 @@ class MatchResult:
 def match_guess(guess: str, track: Track) -> MatchResult:
     """Classify a guess as matching TITLE / ARTIST / BOTH / NONE.
 
-    Logic
-    -----
-    Compute the per-field token-set similarity ``title_s`` and ``artist_s``
-    against the guess. Because ``token_set_ratio`` returns 1.0 whenever the
-    smaller token set is a subset of the larger, a long guess such as
-    "Adele Hello" already maxes both fields individually — we therefore do
-    *not* need a "combined" concatenation score. The fields ARE the truth.
+    Returns NONE for an empty guess or when the normalised guess equals
+    neither the title, the artist, nor any concatenation thereof.
     """
     g = normalize(guess)
     t = normalize(track.title)
     a = normalize(track.artist)
 
-    title_s = _ratio(g, t)
-    artist_s = _ratio(g, a)
+    if not g:
+        return MatchResult(GuessKind.NONE, 0.0, 0.0, 0.0)
 
-    title_hit = title_s >= MATCH_THRESHOLD
-    artist_hit = artist_s >= MATCH_THRESHOLD
+    title_hit = bool(t) and g == t
+    artist_hit = bool(a) and g == a
+    combined_hit = bool(t) and bool(a) and g in {f"{t} {a}", f"{a} {t}"}
 
-    if title_hit and artist_hit:
+    if combined_hit or (title_hit and artist_hit):
         kind = GuessKind.BOTH
     elif title_hit:
         kind = GuessKind.TITLE
@@ -102,4 +90,9 @@ def match_guess(guess: str, track: Track) -> MatchResult:
     else:
         kind = GuessKind.NONE
 
-    return MatchResult(kind, title_s, artist_s, max(title_s, artist_s))
+    return MatchResult(
+        kind=kind,
+        title_score=1.0 if title_hit else 0.0,
+        artist_score=1.0 if artist_hit else 0.0,
+        combined_score=1.0 if combined_hit else 0.0,
+    )
