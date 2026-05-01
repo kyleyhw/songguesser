@@ -247,26 +247,52 @@ $("#formGuess").addEventListener("submit", (ev) => {
 $("#btnHostStart").addEventListener("click", () => send({ type: "start" }));
 
 // Volume control. Max audio.volume = 0.25; default = 0.10.
-// Persisted to localStorage.
+// Persisted to localStorage. Versioned key (`volume_v2`) so older
+// settings from earlier iterations don't override the current default.
 const audio = $("#audio");
 const volSlider = $("#inpVolume");
 const VOL_MAX = 0.25;
 const VOL_DEFAULT = 0.10;
-const savedVol = parseFloat(localStorage.getItem("volume") ?? String(VOL_DEFAULT));
+const VOL_KEY = "volume_v2";
+const savedRaw = localStorage.getItem(VOL_KEY);
+const savedVol = savedRaw === null ? NaN : parseFloat(savedRaw);
 const initialVol = Number.isFinite(savedVol)
   ? Math.max(0, Math.min(VOL_MAX, savedVol))
   : VOL_DEFAULT;
 audio.volume = initialVol;
+audio.muted = false;
 volSlider.value = String(Math.round(initialVol * 100));
+console.info(`[songguesser] volume initialised to ${audio.volume}`);
 volSlider.addEventListener("input", () => {
   const v = parseInt(volSlider.value, 10) / 100;
   audio.volume = v;
-  localStorage.setItem("volume", String(v));
+  audio.muted = false;
+  localStorage.setItem(VOL_KEY, String(v));
 });
 
-// Click-to-unlock audio (browsers block autoplay until a gesture).
-document.body.addEventListener("click", () => {
+// Pre-arm the <audio> element on the first user gesture (any click or key).
+// Browsers block autoplay until the element has been play()'d during a real
+// user gesture; we do a silent muted play+pause on the silence MP3 so that
+// later play() calls in onRoundStart succeed without being blocked.
+let audioUnlocked = false;
+function unlockAudio() {
+  if (audioUnlocked) return;
   const a = $("#audio");
-  if (a.paused && a.src) a.play().catch(() => {});
-}, { once: true });
+  const prevMuted = a.muted;
+  const prevSrc = a.src;
+  a.muted = true;
+  if (!a.src) a.src = "/static/silence.mp3";
+  a.play().then(() => {
+    a.pause();
+    a.currentTime = 0;
+    a.muted = prevMuted;
+    if (!prevSrc) a.removeAttribute("src");
+    audioUnlocked = true;
+    console.info("[songguesser] audio unlocked");
+  }).catch((err) => {
+    console.warn("[songguesser] audio unlock failed:", err);
+  });
+}
+document.addEventListener("click", unlockAudio, { capture: true });
+document.addEventListener("keydown", unlockAudio, { capture: true });
 

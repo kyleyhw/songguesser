@@ -83,7 +83,7 @@ class CreateRoomBody(BaseModel):
     max_rounds: int = 10
     # Spotify CDN previews are 30 s; the round cannot exceed the audio.
     round_seconds: float = Field(default=15.0, gt=0, le=30.0)
-    reveal_seconds: float = 8.0
+    reveal_seconds: float = 4.0
 
 
 # ---------------------------------------------------------------------------
