@@ -13,7 +13,7 @@ uv sync
 uv run python -m songguesser
 ```
 
-Open `http://localhost:8138` in your browser, paste a Spotify playlist
+Open <http://localhost:8138> in your browser, paste a Spotify playlist
 URL (e.g. `https://open.spotify.com/playlist/37i9dQZEVXbLRQDuF5jeBp`),
 click *Create room*, share the code with your friends.
 

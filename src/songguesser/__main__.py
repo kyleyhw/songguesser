@@ -49,9 +49,9 @@ def main() -> None:
         _local_ip(),
     )
     print()  # blank line before uvicorn's own banner
-    print(f"  songguesser  →  http://localhost:{args.port}")
-    print(f"  LAN clients  →  http://{_local_ip()}:{args.port}")
-    print(f"  internet     →  run: cloudflared tunnel --url http://localhost:{args.port}")
+    print(f"  songguesser  ->  http://localhost:{args.port}")
+    print(f"  LAN clients  ->  http://{_local_ip()}:{args.port}")
+    print(f"  internet     ->  run: cloudflared tunnel --url http://localhost:{args.port}")
     print()
 
     uvicorn.run(
