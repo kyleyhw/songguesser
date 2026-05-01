@@ -246,12 +246,12 @@ $("#formGuess").addEventListener("submit", (ev) => {
 
 $("#btnHostStart").addEventListener("click", () => send({ type: "start" }));
 
-// Volume control. Slider range is 0–12 (~1/8 of the full audio gain range);
-// default audio.volume = 0.04. Persisted to localStorage.
+// Volume control. Max audio.volume = 0.25; default = 0.10.
+// Persisted to localStorage.
 const audio = $("#audio");
 const volSlider = $("#inpVolume");
-const VOL_MAX = 0.12;  // slider value 12 maps to audio.volume 0.12
-const VOL_DEFAULT = 0.04;
+const VOL_MAX = 0.25;
+const VOL_DEFAULT = 0.10;
 const savedVol = parseFloat(localStorage.getItem("volume") ?? String(VOL_DEFAULT));
 const initialVol = Number.isFinite(savedVol)
   ? Math.max(0, Math.min(VOL_MAX, savedVol))
