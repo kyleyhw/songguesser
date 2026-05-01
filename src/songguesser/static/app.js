@@ -162,14 +162,16 @@ function onRoundTick(m) {
 }
 
 function onRoundEnd(m) {
-  // Reveal: show the cover and post the answer to chat.
+  // Reveal: load the cover, show title + artist banner.
   const cover = $("#cover");
   if (m.track.cover_url) cover.src = m.track.cover_url;
   $("#stage").classList.add("revealed");
   $("#progressBar").style.width = "100%";
+  $("#revealBanner").hidden = false;
+  $("#revealTitle").textContent = m.track.title;
+  $("#revealArtist").textContent = m.track.artist;
   setEnabled(false);
   renderPlayers(m.leaderboard);
-  chatPush("answer", `${m.track.title} - ${m.track.artist}`);
   if (m.is_final) chatPush("system", "Final round complete.");
 }
 
@@ -246,33 +248,20 @@ $("#formGuess").addEventListener("submit", (ev) => {
 
 $("#btnHostStart").addEventListener("click", () => send({ type: "start" }));
 
-// Volume control. Max audio.volume = 0.25; default = 0.10.
-// Persisted to localStorage. Versioned key (`volume_v2`) so older
-// settings from earlier iterations don't override the current default.
+// Volume control. Default 30%, persisted to localStorage.
 const audio = $("#audio");
 const volSlider = $("#inpVolume");
-const VOL_MAX = 0.25;
-const VOL_DEFAULT = 0.10;
-const VOL_KEY = "volume_v2";
-const savedRaw = localStorage.getItem(VOL_KEY);
-const savedVol = savedRaw === null ? NaN : parseFloat(savedRaw);
-const initialVol = Number.isFinite(savedVol)
-  ? Math.max(0, Math.min(VOL_MAX, savedVol))
-  : VOL_DEFAULT;
+const savedVol = parseFloat(localStorage.getItem("volume") ?? "0.3");
+const initialVol = Number.isFinite(savedVol) ? Math.max(0, Math.min(1, savedVol)) : 0.3;
 audio.volume = initialVol;
-audio.muted = false;
 volSlider.value = String(Math.round(initialVol * 100));
-console.info(`[songguesser] volume initialised to ${audio.volume}`);
 volSlider.addEventListener("input", () => {
   const v = parseInt(volSlider.value, 10) / 100;
   audio.volume = v;
-  audio.muted = false;
-  localStorage.setItem(VOL_KEY, String(v));
+  localStorage.setItem("volume", String(v));
 });
 
-// Click-to-unlock audio (browsers block autoplay until a user gesture has
-// occurred on the page). Once consumed, subsequent audio.play() calls in
-// onRoundStart are honoured because the page has been "activated".
+// Click-to-unlock audio (browsers block autoplay until a gesture).
 document.body.addEventListener("click", () => {
   const a = $("#audio");
   if (a.paused && a.src) a.play().catch(() => {});
