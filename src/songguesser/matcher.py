@@ -40,6 +40,14 @@ _TAG_RE = re.compile(
     re.IGNORECASE | re.VERBOSE,
 )
 
+# Inline featured-artist marker that is *not* parenthesised, e.g.
+# "Jay-Z ft. Rihanna" or "Calvin Harris featuring Dua Lipa". Anything from
+# the marker to end-of-string is dropped when extracting the main artists.
+_INLINE_FEATURE_RE = re.compile(
+    r"\s+(?:feat|ft|featuring|with)\.?\s+.*$",
+    re.IGNORECASE,
+)
+
 
 def normalize(s: str) -> str:
     """Lowercase, strip diacritics + edition tags, collapse punctuation."""
@@ -47,6 +55,28 @@ def normalize(s: str) -> str:
     s = _TAG_RE.sub(" ", s)
     s = re.sub(r"[^a-z0-9]+", " ", s.lower())
     return " ".join(s.split())
+
+
+def main_artists(artist_raw: str) -> list[str]:
+    """Return the list of *main* artists from a (possibly compound) artist
+    string, each individually normalised.
+
+    Spotify's embed page returns the artist field as a flat string such as
+    "Kanye West, Jay-Z" or "Jay-Z, Kanye West feat. Rihanna". We:
+
+      1. Strip parenthesised tags ("(feat. ...)", "(Remastered 2011)") via
+         the existing :data:`_TAG_RE`.
+      2. Strip any inline "feat./ft./featuring/with ..." suffix (no parens).
+      3. Split the remainder on commas — the comma separator is what
+         Spotify uses for co-headliners. We deliberately do *not* split on
+         '&' because it appears inside legitimate single-artist names
+         ("Mumford & Sons", "Earth, Wind & Fire").
+      4. Normalise each piece and drop empties.
+    """
+    s = _TAG_RE.sub(" ", artist_raw)
+    s = _INLINE_FEATURE_RE.sub("", s)
+    parts = [normalize(p) for p in s.split(",")]
+    return [p for p in parts if p]
 
 
 @dataclass(frozen=True)
@@ -67,19 +97,30 @@ class MatchResult:
 def match_guess(guess: str, track: Track) -> MatchResult:
     """Classify a guess as matching TITLE / ARTIST / BOTH / NONE.
 
-    Returns NONE for an empty guess or when the normalised guess equals
-    neither the title, the artist, nor any concatenation thereof.
+    Title rule: normalised guess equals normalised title exactly.
+    Artist rule: normalised guess equals *any one* of the main artists
+        (see :func:`main_artists` — featured artists are excluded).
+    BOTH rule: guess equals "<title> <X>" or "<X> <title>" where X is
+        any main artist or the full normalised artist string.
     """
     g = normalize(guess)
     t = normalize(track.title)
-    a = normalize(track.artist)
+    mains = main_artists(track.artist)
+    full_a = normalize(track.artist)
+    artist_candidates = list(dict.fromkeys([*mains, full_a])) if full_a else mains
 
     if not g:
         return MatchResult(GuessKind.NONE, 0.0, 0.0, 0.0)
 
     title_hit = bool(t) and g == t
-    artist_hit = bool(a) and g == a
-    combined_hit = bool(t) and bool(a) and g in {f"{t} {a}", f"{a} {t}"}
+    artist_hit = bool(artist_candidates) and g in artist_candidates
+
+    combined_set: set[str] = set()
+    if t:
+        for a in artist_candidates:
+            combined_set.add(f"{t} {a}")
+            combined_set.add(f"{a} {t}")
+    combined_hit = g in combined_set
 
     if combined_hit or (title_hit and artist_hit):
         kind = GuessKind.BOTH
