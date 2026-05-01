@@ -270,29 +270,11 @@ volSlider.addEventListener("input", () => {
   localStorage.setItem(VOL_KEY, String(v));
 });
 
-// Pre-arm the <audio> element on the first user gesture (any click or key).
-// Browsers block autoplay until the element has been play()'d during a real
-// user gesture; we do a silent muted play+pause on the silence MP3 so that
-// later play() calls in onRoundStart succeed without being blocked.
-let audioUnlocked = false;
-function unlockAudio() {
-  if (audioUnlocked) return;
+// Click-to-unlock audio (browsers block autoplay until a user gesture has
+// occurred on the page). Once consumed, subsequent audio.play() calls in
+// onRoundStart are honoured because the page has been "activated".
+document.body.addEventListener("click", () => {
   const a = $("#audio");
-  const prevMuted = a.muted;
-  const prevSrc = a.src;
-  a.muted = true;
-  if (!a.src) a.src = "/static/silence.mp3";
-  a.play().then(() => {
-    a.pause();
-    a.currentTime = 0;
-    a.muted = prevMuted;
-    if (!prevSrc) a.removeAttribute("src");
-    audioUnlocked = true;
-    console.info("[songguesser] audio unlocked");
-  }).catch((err) => {
-    console.warn("[songguesser] audio unlock failed:", err);
-  });
-}
-document.addEventListener("click", unlockAudio, { capture: true });
-document.addEventListener("keydown", unlockAudio, { capture: true });
+  if (a.paused && a.src) a.play().catch(() => {});
+}, { once: true });
 
